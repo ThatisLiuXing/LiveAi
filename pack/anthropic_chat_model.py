@@ -101,7 +101,7 @@ class AnthropicChatModel:
         )
         response.encoding = 'utf-8'
         _request_ms = int((time.perf_counter() - _request_start) * 1000)
-        print(f'[HTTP] POST {_request_url} status={response.status_code} ms={_request_ms}')
+        print(f'[HTTP] POST {self.base_url} status={response.status_code} ms={_request_ms}')
         if response.status_code >= 400:
             raise RuntimeError(
                 f'anthropic request failed status={response.status_code} body={response.text[:500]}'

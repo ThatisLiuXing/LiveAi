@@ -1114,20 +1114,24 @@ class AIOrchestrator:
             return False
         return int(message.user_id or 0) == master_qq
 
-    # 号主 QQ：命令类指令（/、# 开头）只允许该账号触发
+    # 号主 QQ：命令类指令（/、# 开头）只允许该账号触发。
+    # 内置历史默认号主；可通过配置 ai.command_master_qq / AI_COMMAND_MASTER_QQ 覆盖。
     _COMMAND_MASTER_QQ = 241898129
 
     def _is_command_master(self, message: ChatMessage) -> bool:
-        """命令权限校验：仅号主本人（QQ 241898129）可触发斜杠/井号命令。"""
+        """命令权限校验：仅号主本人可触发斜杠/井号命令。"""
+        configured = int(getattr(self.config, 'command_master_qq', 0) or 0)
+        master_qq = configured if configured else self._COMMAND_MASTER_QQ
         try:
-            return int(message.user_id or 0) == self._COMMAND_MASTER_QQ
+            return int(message.user_id or 0) == master_qq
         except (TypeError, ValueError):
             return False
 
     def _is_dev_agent_authorized(self, scope_type: str, scope_id: str) -> bool:
-        """私聊场景下 dev_agent 任务只能由管理员账号发起，群聊暂不限制。"""
+        """dev_agent 后台任务仅限号主（admin_qq）私聊发起。
+        群聊无法验证发起者身份，一律程序性拒绝，避免群消息触发宿主机命令执行。"""
         if str(scope_type) != 'private':
-            return True
+            return False
         return str(scope_id) == str(self.config.admin_qq)
 
     async def _handle_power_command(self, message: ChatMessage, cleaned: str):
@@ -2407,12 +2411,15 @@ class AIOrchestrator:
             if scope_type != 'master':
                 result = 'error: 这个工具只能由主AI使用。'
             else:
-                update_result = await self.update_service.execute_update()
-                should_restart = bool(tool_input.get('restart', True))
-                if update_result.get('success') and update_result.get('need_restart') and should_restart:
-                    restart_result = self.update_service.restart_program()
-                    update_result['restart'] = restart_result
-                result = json.dumps(update_result, ensure_ascii=False, indent=2)
+                if not bool(tool_input.get('confirm', False)):
+                    result = 'error: 更新会从远端拉取代码并可能要求重启进程。必须显式传入 confirm=true 才会执行，请评估后再调用。'
+                else:
+                    update_result = await self.update_service.execute_update()
+                    should_restart = bool(tool_input.get('restart', False))
+                    if update_result.get('success') and update_result.get('need_restart') and should_restart:
+                        restart_result = self.update_service.restart_program()
+                        update_result['restart'] = restart_result
+                    result = json.dumps(update_result, ensure_ascii=False, indent=2)
         elif name == 'list_tasks':
             kind_filter = str(tool_input.get('kind') or '').strip() or None
             status_filter = str(tool_input.get('status') or '').strip() or None
@@ -2472,7 +2479,19 @@ class AIOrchestrator:
                         dest_dir = proj_root / 'data' / 'file' / str(scope_id)
                         dest_dir.mkdir(parents=True, exist_ok=True)
                         safe_name = re.sub(r'[\\/:*?"<>|]', '_', file_name) or 'file'
+                        safe_name = safe_name.replace('..', '_').strip('. _')
+                        if not safe_name:
+                            safe_name = 'file'
                         dest_path = dest_dir / safe_name
+                        try:
+                            dest_resolved = dest_path.resolve()
+                            dest_dir_resolved = dest_dir.resolve()
+                            if os.path.commonpath([str(dest_resolved), str(dest_dir_resolved)]) != str(dest_dir_resolved):
+                                result = '非法文件名，已拒绝保存。'
+                                dest_path = None
+                        except (OSError, ValueError):
+                            result = '非法文件名，已拒绝保存。'
+                            dest_path = None
                         src_path = file_info.get('file') or ''
                         try:
                             if src_path and pathlib.Path(src_path).exists():
@@ -3505,7 +3524,7 @@ class AIOrchestrator:
                         agent_id,
                         f'task:{kind}',
                         content,
-                        '拒绝：当前私聊不是管理员账号，无权发起 dev_agent 后台任务。',
+                        '拒绝：dev_agent 后台任务仅限号主私聊发起，群聊或非管理员私聊一律拒绝。',
                         limit=self.config.history_limit,
                     )
                     message_parts.append('（这个操作需要号主本人才能发起，我暂时没法帮你做。）')
@@ -3735,7 +3754,7 @@ class AIOrchestrator:
             if not kind:
                 return '缺少任务类型，未创建。'
             if kind == 'dev_agent' and not self._is_dev_agent_authorized(scope_type, scope_id):
-                result = '当前私聊不是管理员账号，无权发起 dev_agent 后台任务。'
+                result = 'dev_agent 后台任务仅限号主私聊发起，群聊或非管理员私聊一律拒绝。'
                 self.tools.record_tool_use(
                     scope_type,
                     scope_id,

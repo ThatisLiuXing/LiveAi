@@ -20,6 +20,8 @@ ai:
   enabled: true
   admin_qq: 123456789
   master_qq: 123456789  # 主人QQ号，AI会识别为"主人"并给予最高信任
+  # 斜杠/井号命令号主QQ；留空 0 时使用内置历史默认值
+  command_master_qq: 0
 
   # 模型/渠道配置统一在 data/models_config.json 中管理
   models_config_path: "data/models_config.json"
@@ -53,3 +55,6 @@ webui:
   enabled: true
   host: "127.0.0.1"
   port: 8765
+  # 访问令牌：建议设置为随机字符串。设置后所有 /api/* 请求必须携带 Authorization: Bearer <token>
+  # 留空则不鉴权（保持向后兼容），请勿将 host 暴露到公网。
+  token: ""

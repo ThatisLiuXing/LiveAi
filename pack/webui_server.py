@@ -1,3 +1,4 @@
+import hmac
 from pathlib import Path
 import json
 import threading
@@ -13,11 +14,12 @@ from pack.console_logger import ok, warn
 
 
 class WebUIService:
-    def __init__(self, host: str, port: int, repo: AIRepository, orchestrator: AIOrchestrator):
+    def __init__(self, host: str, port: int, repo: AIRepository, orchestrator: AIOrchestrator, token: str = ''):
         self.host = host
         self.port = port
         self.repo = repo
         self.orchestrator = orchestrator
+        self.token = str(token or '')
         self.httpd = None
         self.thread = None
         self._html_cache = None
@@ -29,7 +31,10 @@ class WebUIService:
         self.httpd = ThreadingHTTPServer((self.host, self.port), handler)
         self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
         self.thread.start()
-        ok(f'WebUI 管理面板 → http://{self.host}:{self.port}')
+        if self.token:
+            ok(f'WebUI 管理面板 → http://{self.host}:{self.port}（已启用访问令牌鉴权）')
+        else:
+            warn(f'WebUI 管理面板 → http://{self.host}:{self.port}（未设置访问令牌，请勿暴露到公网）')
 
     def _build_handler(self):
         service = self
@@ -39,6 +44,8 @@ class WebUIService:
                 parsed = urlparse(self.path)
                 if parsed.path == '/':
                     return self._write_html(service._render_index())
+                if not self._check_auth():
+                    return
                 if parsed.path == '/api/overview':
                     return self._write_json(service.get_overview())
                 if parsed.path == '/api/commands':
@@ -84,6 +91,8 @@ class WebUIService:
                 return self._write_json({'error': 'not found'}, status=404)
 
             def do_POST(self):
+                if not self._check_auth():
+                    return
                 parsed = urlparse(self.path)
                 payload = self._read_json()
                 if parsed.path == '/api/model':
@@ -152,11 +161,22 @@ class WebUIService:
                 except json.JSONDecodeError:
                     return {}
 
+            def _check_auth(self) -> bool:
+                if not service.token:
+                    return True
+                header = self.headers.get('Authorization') or ''
+                token = header[7:] if header[:7].lower() == 'bearer ' else ''
+                if token and hmac.compare_digest(token, service.token):
+                    return True
+                self._write_json({'error': 'unauthorized'}, status=401)
+                return False
+
             def _write_json(self, payload: dict, status: int = 200):
                 body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
                 self.send_response(status)
                 self.send_header('Content-Type', 'application/json; charset=utf-8')
                 self.send_header('Content-Length', str(len(body)))
+                self._write_security_headers()
                 self.end_headers()
                 self.wfile.write(body)
 
@@ -165,8 +185,14 @@ class WebUIService:
                 self.send_response(status)
                 self.send_header('Content-Type', 'text/html; charset=utf-8')
                 self.send_header('Content-Length', str(len(body)))
+                self._write_security_headers()
                 self.end_headers()
                 self.wfile.write(body)
+
+            def _write_security_headers(self):
+                self.send_header('X-Content-Type-Options', 'nosniff')
+                self.send_header('X-Frame-Options', 'DENY')
+                self.send_header('Referrer-Policy', 'no-referrer')
 
             def log_message(self, fmt: str, *args):
                 return

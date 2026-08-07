@@ -107,6 +107,7 @@ def build_app() -> NapcatBot:
             port=config.webui.port,
             repo=ai_repo,
             orchestrator=ai_orchestrator,
+            token=config.webui.token,
         )
         webui.start()
 

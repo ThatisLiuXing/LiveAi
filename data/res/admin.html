@@ -207,6 +207,15 @@
   </style>
 </head>
 <body>
+  <div id="authOverlay" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.85);z-index:9999;display:none;align-items:center;justify-content:center;">
+    <div style="background:#1e1e2e;padding:32px;border-radius:12px;width:320px;color:#e2e2e2;font-family:system-ui,sans-serif;">
+      <div style="font-size:16px;font-weight:600;margin-bottom:8px;">需要访问令牌</div>
+      <div style="font-size:12px;color:#999;margin-bottom:16px;">请输入 WebUI 访问令牌（对应 webui.token 配置项或 WEBUI_TOKEN 环境变量）</div>
+      <input id="authTokenInput" type="password" placeholder="访问令牌" style="width:100%;box-sizing:border-box;padding:8px 10px;border-radius:6px;border:1px solid #444;background:#12121a;color:#e2e2e2;margin-bottom:16px;">
+      <button id="authTokenBtn" style="width:100%;padding:8px 0;border-radius:6px;border:none;background:#5865f2;color:#fff;cursor:pointer;font-size:14px;">进入</button>
+      <div id="authError" style="color:#f87171;font-size:12px;margin-top:8px;display:none;">令牌错误，请重试</div>
+    </div>
+  </div>
   <div class="window-wrapper">
     <div class="app-container">
     
@@ -556,9 +565,44 @@
 
     let botId = null;
 
+    function getWebUIToken() {
+      let t = localStorage.getItem('liveai_webui_token') || '';
+      if (!t) {
+        const m = new URLSearchParams(window.location.search).get('token');
+        if (m) { t = m; localStorage.setItem('liveai_webui_token', t); }
+      }
+      return t;
+    }
+
+    function showAuthOverlay() {
+      const el = document.getElementById('authOverlay');
+      if (el) el.style.display = 'flex';
+    }
+    function hideAuthOverlay() {
+      const el = document.getElementById('authOverlay');
+      if (el) el.style.display = 'none';
+    }
+    document.addEventListener('DOMContentLoaded', function () {
+      const btn = document.getElementById('authTokenBtn');
+      if (btn) btn.addEventListener('click', function () {
+        const t = (document.getElementById('authTokenInput') || {}).value ? document.getElementById('authTokenInput').value.trim() : '';
+        if (!t) return;
+        localStorage.setItem('liveai_webui_token', t);
+        hideAuthOverlay();
+        location.reload();
+      });
+    });
+
     async function fetchJson(url, options = {}) {
       options.cache = 'no-store';
+      const token = getWebUIToken();
+      if (token) options.headers = Object.assign({}, options.headers, { 'Authorization': 'Bearer ' + token });
       const res = await fetch(url, options);
+      if (res.status === 401) {
+        localStorage.removeItem('liveai_webui_token');
+        showAuthOverlay();
+        throw new Error('unauthorized');
+      }
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || data.message || 'request failed');
       return data;

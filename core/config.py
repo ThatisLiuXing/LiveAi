@@ -70,6 +70,8 @@ class AIConfig:
     enabled: bool = _get_bool('ai', 'enabled', 'AI_ENABLED', True)
     admin_qq: int = _get_int('ai', 'admin_qq', 'AI_ADMIN_QQ', 0)
     master_qq: int = _get_int('ai', 'master_qq', 'AI_MASTER_QQ', 0)
+    # 斜杠/井号命令号主 QQ；0 表示回退到内置历史默认值
+    command_master_qq: int = _get_int('ai', 'command_master_qq', 'AI_COMMAND_MASTER_QQ', 0)
     models_config_path: str = _get('ai', 'models_config_path', 'AI_MODELS_CONFIG_PATH', 'data/models_config.json')
     storage_path: str = _get('ai', 'storage_path', 'AI_STORAGE_PATH', 'data/msgs/ai_state.json')
     main_prompt_path: str = _get('ai', 'main_prompt_path', 'AI_MAIN_PROMPT_PATH', 'data/prompt/main.txt')
@@ -94,6 +96,9 @@ class WebUIConfig:
     enabled: bool = _get_bool('webui', 'enabled', 'WEBUI_ENABLED', True)
     host: str = _get('webui', 'host', 'WEBUI_HOST', '127.0.0.1')
     port: int = _get_int('webui', 'port', 'WEBUI_PORT', 8765)
+    # 访问令牌：非空时所有 /api/* 请求必须携带 Authorization: Bearer <token>
+    # 留空则保持向后兼容（不鉴权），强烈建议生产环境设置
+    token: str = _get('webui', 'token', 'WEBUI_TOKEN', '')
 
 
 @dataclass
