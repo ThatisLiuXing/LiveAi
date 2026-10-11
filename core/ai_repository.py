@@ -736,7 +736,8 @@ class AIRepository:
 
     def get_agent(self, scope_type: str, scope_id: str) -> dict | None:
         payload = self.store.load()
-        return (payload.get('agents') or {}).get(self._agent_key(scope_type, scope_id))
+        data = (payload.get('agents') or {}).get(self._agent_key(scope_type, scope_id))
+        return dict(data) if data else None
 
     def get_memory(self, scope_type: str, scope_id: str) -> dict:
         key = self._memory_key(scope_type, scope_id)
@@ -748,7 +749,8 @@ class AIRepository:
         """获取一个scope（群聊/私聊）的关系数据：好感度、关联度、备注"""
         payload = self.store.load()
         scope_key = self._agent_key(scope_type, scope_id)
-        return (payload.get('relations', {}).get('scopes', {}).get(scope_key))
+        data = (payload.get('relations', {}).get('scopes', {}).get(scope_key))
+        return dict(data) if data else None
 
     def update_scope_relation(
         self,

@@ -791,17 +791,17 @@ class AIOrchestrator:
 
     async def _handle_model_command(self, message: ChatMessage, cleaned: str):
         if not self._is_admin_message(message):
-            self.bot.send_text(message.chat_type, message.chat_id, '这个指令你先别动。')
+            await self._send_text(message.chat_type, message.chat_id, '这个指令你先别动。')
             return
 
         try:
             parts = shlex.split(cleaned)
         except ValueError as exc:
-            self.bot.send_text(message.chat_type, message.chat_id, f'模型指令解析失败: {exc}')
+            await self._send_text(message.chat_type, message.chat_id, f'模型指令解析失败: {exc}')
             return
 
         if len(parts) == 1:
-            self.bot.send_text(
+            await self._send_text(
                 message.chat_type,
                 message.chat_id,
                 f"{self.model_manager.get_summary_text()}\n\n{self.model_manager.list_models()}\n\n用法:\n{self._model_command_help_text()}",
@@ -811,33 +811,33 @@ class AIOrchestrator:
         sub = str(parts[1] or '').strip().lower()
 
         if sub in {'help', '?', 'h'}:
-            self.bot.send_text(message.chat_type, message.chat_id, self._model_command_help_text())
+            await self._send_text(message.chat_type, message.chat_id, self._model_command_help_text())
             return
 
         if sub in {'list', 'ls'}:
-            self.bot.send_text(message.chat_type, message.chat_id, self.model_manager.list_models())
+            await self._send_text(message.chat_type, message.chat_id, self.model_manager.list_models())
             return
 
         if sub in {'current', 'status'}:
-            self.bot.send_text(message.chat_type, message.chat_id, self.model_manager.get_summary_text())
+            await self._send_text(message.chat_type, message.chat_id, self.model_manager.get_summary_text())
             return
 
         if sub == 'reload':
             result = self.reload_models_config()
             msg = f"模型配置已重载，当前模型: {result.get('current')}" if result.get('loaded') else str(result.get('message') or '重载失败')
-            self.bot.send_text(message.chat_type, message.chat_id, msg)
+            await self._send_text(message.chat_type, message.chat_id, msg)
             return
 
         if sub in {'switch', 'use'}:
             if len(parts) < 3:
-                self.bot.send_text(message.chat_type, message.chat_id, '缺少目标模型，例如：/model switch 0')
+                await self._send_text(message.chat_type, message.chat_id, '缺少目标模型，例如：/model switch 0')
                 return
             success, msg = self.model_manager.switch_model(parts[2], persist=True)
             if success:
                 current = self.model_manager.get_current_model()
                 if current:
                     self._update_model_from_config(current)
-            self.bot.send_text(message.chat_type, message.chat_id, msg)
+            await self._send_text(message.chat_type, message.chat_id, msg)
             return
 
         if sub in {'channel', 'channels'}:
@@ -849,7 +849,7 @@ class AIOrchestrator:
             current = self.model_manager.get_current_model()
             if current:
                 self._update_model_from_config(current)
-        self.bot.send_text(message.chat_type, message.chat_id, msg)
+        await self._send_text(message.chat_type, message.chat_id, msg)
 
     def _model_command_help_text(self) -> str:
         return (
@@ -883,18 +883,18 @@ class AIOrchestrator:
 
     async def _handle_model_channel_command(self, message: ChatMessage, args: list[str]):
         if not args:
-            self.bot.send_text(message.chat_type, message.chat_id, self.model_manager.list_channels())
+            await self._send_text(message.chat_type, message.chat_id, self.model_manager.list_channels())
             return
 
         action = str(args[0] or '').strip().lower()
         if action in {'list', 'ls'}:
-            self.bot.send_text(message.chat_type, message.chat_id, self.model_manager.list_channels())
+            await self._send_text(message.chat_type, message.chat_id, self.model_manager.list_channels())
             return
 
         if action == 'add':
             kv, unknown = self._parse_model_kv_args(args[1:])
             if unknown:
-                self.bot.send_text(message.chat_type, message.chat_id, f'无法识别的参数: {" ".join(unknown)}')
+                await self._send_text(message.chat_type, message.chat_id, f'无法识别的参数: {" ".join(unknown)}')
                 return
             success, msg = self.model_manager.add_channel(
                 name=kv.get('name', ''),
@@ -903,17 +903,17 @@ class AIOrchestrator:
                 messages_path=kv.get('messages_path', '/v1/messages'),
                 models=kv.get('models', ''),
             )
-            self.bot.send_text(message.chat_type, message.chat_id, msg)
+            await self._send_text(message.chat_type, message.chat_id, msg)
             return
 
         if action in {'update', 'edit'}:
             if len(args) < 2:
-                self.bot.send_text(message.chat_type, message.chat_id, '缺少目标渠道，例如：/model channel update 0 name=xxx')
+                await self._send_text(message.chat_type, message.chat_id, '缺少目标渠道，例如：/model channel update 0 name=xxx')
                 return
             target = args[1]
             kv, unknown = self._parse_model_kv_args(args[2:])
             if unknown:
-                self.bot.send_text(message.chat_type, message.chat_id, f'无法识别的参数: {" ".join(unknown)}')
+                await self._send_text(message.chat_type, message.chat_id, f'无法识别的参数: {" ".join(unknown)}')
                 return
             success, msg = self.model_manager.update_channel(
                 target,
@@ -927,22 +927,22 @@ class AIOrchestrator:
                 current = self.model_manager.get_current_model()
                 if current:
                     self._update_model_from_config(current)
-            self.bot.send_text(message.chat_type, message.chat_id, msg)
+            await self._send_text(message.chat_type, message.chat_id, msg)
             return
 
         if action in {'remove', 'rm', 'del', 'delete'}:
             if len(args) < 2:
-                self.bot.send_text(message.chat_type, message.chat_id, '缺少目标渠道，例如：/model channel remove 0')
+                await self._send_text(message.chat_type, message.chat_id, '缺少目标渠道，例如：/model channel remove 0')
                 return
             success, msg = self.model_manager.remove_channel(args[1])
             if success:
                 current = self.model_manager.get_current_model()
                 if current:
                     self._update_model_from_config(current)
-            self.bot.send_text(message.chat_type, message.chat_id, msg)
+            await self._send_text(message.chat_type, message.chat_id, msg)
             return
 
-        self.bot.send_text(
+        await self._send_text(
             message.chat_type,
             message.chat_id,
             '不支持的渠道操作。\n可用子命令: list / add / update / remove',
@@ -958,13 +958,13 @@ class AIOrchestrator:
         try:
             parts = shlex.split(cleaned)
         except ValueError as exc:
-            self.bot.send_text(message.chat_type, message.chat_id, f'指令解析失败: {exc}')
+            await self._send_text(message.chat_type, message.chat_id, f'指令解析失败: {exc}')
             return
 
         sub = str(parts[1] if len(parts) > 1 else '').strip().lower()
 
         if not sub or sub in {'list', 'ls'}:
-            self.bot.send_text(message.chat_type, message.chat_id, self.model_manager.list_upstreams_text())
+            await self._send_text(message.chat_type, message.chat_id, self.model_manager.list_upstreams_text())
             return
 
         if sub == 'add':
@@ -973,24 +973,24 @@ class AIOrchestrator:
                 name=kv.get('name', ''), base_url=kv.get('base_url', ''),
                 api_key=kv.get('api_key', ''), messages_path=kv.get('messages_path', ''),
             )
-            self.bot.send_text(message.chat_type, message.chat_id, msg)
+            await self._send_text(message.chat_type, message.chat_id, msg)
             return
 
         if sub in {'update', 'edit'}:
             if len(parts) < 3:
-                self.bot.send_text(message.chat_type, message.chat_id, '缺少目标，例: /upstream update deepseek api_key=sk-new')
+                await self._send_text(message.chat_type, message.chat_id, '缺少目标，例: /upstream update deepseek api_key=sk-new')
                 return
             kv, _ = self._parse_model_kv_args(parts[3:])
             ok, msg = self.model_manager.update_upstream(parts[2], **kv)
-            self.bot.send_text(message.chat_type, message.chat_id, msg)
+            await self._send_text(message.chat_type, message.chat_id, msg)
             return
 
         if sub in {'remove', 'rm', 'del'}:
             if len(parts) < 3:
-                self.bot.send_text(message.chat_type, message.chat_id, '缺少目标，例: /upstream remove deepseek')
+                await self._send_text(message.chat_type, message.chat_id, '缺少目标，例: /upstream remove deepseek')
                 return
             ok, msg = self.model_manager.remove_upstream(parts[2])
-            self.bot.send_text(message.chat_type, message.chat_id, msg)
+            await self._send_text(message.chat_type, message.chat_id, msg)
             return
 
         help_text = (
@@ -1000,7 +1000,7 @@ class AIOrchestrator:
             '/upstream update <名称> key=value ...\n'
             '/upstream remove <名称>'
         )
-        self.bot.send_text(message.chat_type, message.chat_id, help_text)
+        await self._send_text(message.chat_type, message.chat_id, help_text)
 
     # ─── 渠道命令 /channel ───
 
@@ -1009,13 +1009,13 @@ class AIOrchestrator:
         try:
             parts = shlex.split(cleaned)
         except ValueError as exc:
-            self.bot.send_text(message.chat_type, message.chat_id, f'指令解析失败: {exc}')
+            await self._send_text(message.chat_type, message.chat_id, f'指令解析失败: {exc}')
             return
 
         sub = str(parts[1] if len(parts) > 1 else '').strip().lower()
 
         if not sub or sub in {'list', 'ls'}:
-            self.bot.send_text(message.chat_type, message.chat_id, self.model_manager.list_channels_text())
+            await self._send_text(message.chat_type, message.chat_id, self.model_manager.list_channels_text())
             return
 
         if sub == 'add':
@@ -1024,32 +1024,32 @@ class AIOrchestrator:
                 name=kv.get('name', ''), strategy=kv.get('strategy', 'fallback'),
                 models=kv.get('models', ''),
             )
-            self.bot.send_text(message.chat_type, message.chat_id, msg)
+            await self._send_text(message.chat_type, message.chat_id, msg)
             return
 
         if sub in {'update', 'edit'}:
             if len(parts) < 3:
-                self.bot.send_text(message.chat_type, message.chat_id, '缺少目标，例: /channel update 主力渠道 strategy=random')
+                await self._send_text(message.chat_type, message.chat_id, '缺少目标，例: /channel update 主力渠道 strategy=random')
                 return
             kv, _ = self._parse_model_kv_args(parts[3:])
             ok, msg = self.model_manager.update_channel(parts[2], **kv)
-            self.bot.send_text(message.chat_type, message.chat_id, msg)
+            await self._send_text(message.chat_type, message.chat_id, msg)
             return
 
         if sub in {'remove', 'rm', 'del'}:
             if len(parts) < 3:
-                self.bot.send_text(message.chat_type, message.chat_id, '缺少目标，例: /channel remove 主力渠道')
+                await self._send_text(message.chat_type, message.chat_id, '缺少目标，例: /channel remove 主力渠道')
                 return
             ok, msg = self.model_manager.remove_channel(parts[2])
-            self.bot.send_text(message.chat_type, message.chat_id, msg)
+            await self._send_text(message.chat_type, message.chat_id, msg)
             return
 
         if sub in {'addmodel', 'addm'}:
             if len(parts) < 5:
-                self.bot.send_text(message.chat_type, message.chat_id, '用法: /channel addmodel <渠道> <上游> <模型ID>')
+                await self._send_text(message.chat_type, message.chat_id, '用法: /channel addmodel <渠道> <上游> <模型ID>')
                 return
             ok, msg = self.model_manager.add_model_to_channel(parts[2], parts[3], parts[4])
-            self.bot.send_text(message.chat_type, message.chat_id, msg)
+            await self._send_text(message.chat_type, message.chat_id, msg)
             return
 
         help_text = (
@@ -1060,7 +1060,7 @@ class AIOrchestrator:
             '/channel remove <名称>\n'
             '/channel addmodel <渠道名> <上游名> <模型ID>'
         )
-        self.bot.send_text(message.chat_type, message.chat_id, help_text)
+        await self._send_text(message.chat_type, message.chat_id, help_text)
 
     # ─── 角色命令 /role ───
 
@@ -1069,23 +1069,23 @@ class AIOrchestrator:
         try:
             parts = shlex.split(cleaned)
         except ValueError as exc:
-            self.bot.send_text(message.chat_type, message.chat_id, f'指令解析失败: {exc}')
+            await self._send_text(message.chat_type, message.chat_id, f'指令解析失败: {exc}')
             return
 
         sub = str(parts[1] if len(parts) > 1 else '').strip().lower()
 
         if not sub or sub in {'list', 'ls'}:
-            self.bot.send_text(message.chat_type, message.chat_id, self.model_manager.list_roles_text())
+            await self._send_text(message.chat_type, message.chat_id, self.model_manager.list_roles_text())
             return
 
         if sub == 'set':
             if len(parts) < 4:
-                self.bot.send_text(message.chat_type, message.chat_id, '用法: /role set <角色> <渠道名>\n角色可用: main tiered agent dev_agent vision')
+                await self._send_text(message.chat_type, message.chat_id, '用法: /role set <角色> <渠道名>\n角色可用: main tiered agent dev_agent vision')
                 return
             ok, msg = self.model_manager.set_role(parts[2], parts[3])
             if ok:
                 self.reload_models_config()
-            self.bot.send_text(message.chat_type, message.chat_id, msg)
+            await self._send_text(message.chat_type, message.chat_id, msg)
             return
 
         help_text = (
@@ -1094,13 +1094,13 @@ class AIOrchestrator:
             '/role set <角色> <渠道名>\n'
             '角色: main / tiered / agent / dev_agent / vision'
         )
-        self.bot.send_text(message.chat_type, message.chat_id, help_text)
+        await self._send_text(message.chat_type, message.chat_id, help_text)
 
     # ─── 测试命令 /test ───
 
     async def _handle_test_command(self, message: ChatMessage, cleaned: str):
         if not self._is_admin_message(message):
-            self.bot.send_text(message.chat_type, message.chat_id, '这个指令你先别动。')
+            await self._send_text(message.chat_type, message.chat_id, '这个指令你先别动。')
             return
 
         await handle_test_command(message, cleaned, self.model_manager, self.bot)
@@ -1132,7 +1132,7 @@ class AIOrchestrator:
 
     async def _handle_power_command(self, message: ChatMessage, cleaned: str):
         if not self._is_admin_message(message):
-            self.bot.send_text(message.chat_type, message.chat_id, '这个指令你先别动。')
+            await self._send_text(message.chat_type, message.chat_id, '这个指令你先别动。')
             return
 
         command = str(cleaned or '').strip().lower()
@@ -1143,7 +1143,7 @@ class AIOrchestrator:
 
         if command == '/restart':
             self._cancel_active_requests()
-            self.bot.send_text(message.chat_type, message.chat_id, '正在重启…')
+            await self._send_text(message.chat_type, message.chat_id, '正在重启…')
             warn('[AI] /restart requested, re-executing process in place')
             # 原地替换当前进程重启，不依赖外部守护进程
             try:
@@ -1158,18 +1158,18 @@ class AIOrchestrator:
                 os.execv(sys.executable, [sys.executable, _main_script])
             except Exception as _e:
                 error(f'[AI] /restart execv failed: {_e}')
-                self.bot.send_text(message.chat_type, message.chat_id, f'重启失败: {_e}')
+                await self._send_text(message.chat_type, message.chat_id, f'重启失败: {_e}')
             return
 
         if command == '/on':
             self.config.enabled = True
-            self.bot.send_text(message.chat_type, message.chat_id, 'AI 已开启。')
+            await self._send_text(message.chat_type, message.chat_id, 'AI 已开启。')
             return
 
         if command == '/off':
             self.config.enabled = False
             self._cancel_active_requests()
-            self.bot.send_text(message.chat_type, message.chat_id, 'AI 已关闭，后续普通消息将不再触发。')
+            await self._send_text(message.chat_type, message.chat_id, 'AI 已关闭，后续普通消息将不再触发。')
             return
 
         if command == '/clean':
@@ -1178,7 +1178,7 @@ class AIOrchestrator:
             self._recent_message_keys.clear()
             self._scheduled_alarm_ids.clear()
             self.config.enabled = True
-            self.bot.send_text(
+            await self._send_text(
                 message.chat_type,
                 message.chat_id,
                 'AI 已重置：全部对话、印象、备注、工具记录、上下文快照、任务和关系数据已清空，并恢复为开启状态。',
@@ -1325,55 +1325,55 @@ class AIOrchestrator:
             return
 
         if cleaned in {'#help', '#指令', '#菜单', '#命令'}:
-            self._send_chat_reply(message, self._build_help_text())
+            await self._send_chat_reply(message, self._build_help_text())
             return
 
         if cleaned in {'#status', '#状态'}:
-            self._send_chat_reply(message, self._build_status_text(scope_type, scope_id, agent, source_label))
+            await self._send_chat_reply(message, self._build_status_text(scope_type, scope_id, agent, source_label))
             return
 
         if cleaned in {'#profile', '#画像', '#资料'}:
-            self._send_chat_reply(message, self._build_profile_text(agent, source_label))
+            await self._send_chat_reply(message, self._build_profile_text(agent, source_label))
             return
 
         if cleaned in {'#impression', '#印象'}:
-            self._send_chat_reply(message, self._build_impression_text(scope_type, scope_id, agent))
+            await self._send_chat_reply(message, self._build_impression_text(scope_type, scope_id, agent))
             return
 
         if cleaned in {'#notes', '#备注', '#记忆'}:
-            self._send_chat_reply(message, self._build_notes_text(scope_type, scope_id))
+            await self._send_chat_reply(message, self._build_notes_text(scope_type, scope_id))
             return
 
         if cleaned in {'#tasks', '#任务', '#任务列表'}:
-            self._send_chat_reply(message, self._build_recent_tasks_text(agent.agent_id))
+            await self._send_chat_reply(message, self._build_recent_tasks_text(agent.agent_id))
             return
 
         task_lookup = self._extract_task_lookup(cleaned)
         if task_lookup:
-            self._send_chat_reply(message, self._build_task_detail_text(task_lookup))
+            await self._send_chat_reply(message, self._build_task_detail_text(task_lookup))
             return
 
         if cleaned in {'#refresh-impression', '#刷新印象'}:
             ok, result = self.schedule_refresh_impression(scope_type, scope_id)
             if ok:
-                self._send_chat_reply(message, f'印象刷新任务已提交：{result}')
+                await self._send_chat_reply(message, f'印象刷新任务已提交：{result}')
             else:
-                self._send_chat_reply(message, result)
+                await self._send_chat_reply(message, result)
             return
 
         if cleaned in {'#clear', '#clear-chat', '#清空聊天记录'}:
             self.repo.clear_messages(scope_type, scope_id)
-            self._send_chat_reply(message, '对话记忆已清空喵~')
+            await self._send_chat_reply(message, '对话记忆已清空喵~')
             return
 
         if cleaned in {'#clear-notes', '#清空备注'}:
             self.repo.clear_notes(scope_type, scope_id)
-            self._send_chat_reply(message, '这段会话的 AI 工具备忘已经清空了。')
+            await self._send_chat_reply(message, '这段会话的 AI 工具备忘已经清空了。')
             return
 
         if cleaned in {'#clear-all', '#clear-memory', '#清空记忆'}:
             self.repo.clear_memory(scope_type, scope_id)
-            self._send_chat_reply(message, '这段会话的聊天记录、AI 工具备忘和工具记录都清掉了。')
+            await self._send_chat_reply(message, '这段会话的聊天记录、AI 工具备忘和工具记录都清掉了。')
             return
 
         if not self.config.enabled:
@@ -1412,10 +1412,10 @@ class AIOrchestrator:
             task_id = cleaned.split(' ', 1)[1].strip()
             task = self.repo.get_task(task_id)
             if not task:
-                self._send_chat_reply(message, '没有找到这个任务喵~')
+                await self._send_chat_reply(message, '没有找到这个任务喵~')
             else:
                 result = task.get('result') or '暂无结果'
-                self._send_chat_reply(message, f"任务 {task_id}: {task.get('status')}\n{result}")
+                await self._send_chat_reply(message, f"任务 {task_id}: {task.get('status')}\n{result}")
             return
 
         # 意图检测器已移除：闹钟/联系/全局设定/状态查询等一律交给 AI 自主判断，
@@ -1499,10 +1499,14 @@ class AIOrchestrator:
             finally:
                 self.queue.task_done()
 
-    def _send_chat_reply(self, message: ChatMessage, text: str):
-        self.bot.send_text(message.chat_type, message.chat_id, text)
+    async def _send_text(self, chat_type: str, target_id: int, text: str) -> dict:
+        """统一异步发送门面：send_text 走同步 requests，放线程池执行，避免阻塞事件循环。"""
+        return await asyncio.to_thread(self.bot.send_text, chat_type, target_id, text)
+
+    async def _send_chat_reply(self, message: ChatMessage, text: str):
+        await self._send_text(message.chat_type, message.chat_id, text)
         # _record_outbound_message 现为 async（append_message 已移出事件循环）。
-        # 本方法是同步的指令快通道，用 fire-and-forget 调度落库，不阻塞指令响应。
+        # 指令快通道用 fire-and-forget 调度落库，不阻塞指令响应。
         if self.loop is not None:
             self.loop.create_task(
                 self._record_outbound_message(message.chat_type, str(message.chat_id), text)
@@ -2455,7 +2459,7 @@ class AIOrchestrator:
                 result = 'error: file_id 为空，无法下载文件。'
             else:
                 try:
-                    file_info = self.bot.get_file(file_id)
+                    file_info = await asyncio.to_thread(self.bot.get_file, file_id)
                 except Exception as e:
                     file_info = None
                     result = f'获取文件信息失败: {e}'
@@ -2918,7 +2922,7 @@ class AIOrchestrator:
                 bot_qq = self.bot.self_id
                 # 获取 bot 自身在群里的角色
                 try:
-                    bot_info = self.bot.get_group_member_info(group_id, bot_qq)
+                    bot_info = await asyncio.to_thread(self.bot.get_group_member_info, group_id, bot_qq)
                     bot_role = bot_info.get('role', 'member')
                 except Exception as e:
                     bot_role = 'unknown'
@@ -2930,7 +2934,7 @@ class AIOrchestrator:
                     target_id = tool_input.get('target_user_id')
                     if target_id:
                         try:
-                            target_info = self.bot.get_group_member_info(group_id, int(target_id))
+                            target_info = await asyncio.to_thread(self.bot.get_group_member_info, group_id, int(target_id))
                             lines.append(f'目标用户 {target_id} 角色: {target_info.get("role", "unknown")}')
                         except Exception as e:
                             lines.append(f'查询目标用户 {target_id} 失败: {e}')
@@ -2947,7 +2951,7 @@ class AIOrchestrator:
                         target_id = int(target_id)
                         # 查询目标用户角色，做权限层级检查
                         try:
-                            target_info = self.bot.get_group_member_info(group_id, target_id)
+                            target_info = await asyncio.to_thread(self.bot.get_group_member_info, group_id, target_id)
                             target_role = target_info.get('role', 'member')
                         except Exception as e:
                             result = f'manage_mute: 查询目标用户 {target_id} 失败: {e}'
@@ -2969,7 +2973,7 @@ class AIOrchestrator:
                                 else:  # unban
                                     duration = 0
                                 try:
-                                    self.bot.set_group_ban(group_id, target_id, duration)
+                                    await asyncio.to_thread(self.bot.set_group_ban, group_id, target_id, duration)
                                     if action == 'ban' and duration > 0:
                                         mins = duration // 60
                                         secs = duration % 60
@@ -3284,7 +3288,7 @@ class AIOrchestrator:
                         result = await self._run_ai_tool_call(scope_type, scope_id, agent_id, call.name, call.input)
                         used_tools = True
                     else:
-                        result = self._execute_live_action_tool_call(
+                        result = await self._execute_live_action_tool_call(
                             scope_type,
                             scope_id,
                             agent_id,
@@ -3381,7 +3385,7 @@ class AIOrchestrator:
                             )
                             return {'message': final_reply, 'think_note': '', 'tool_context_messages': tool_context_messages}, _loop_guard_ms, used_tools
                         elif call.name == 'send_message':
-                            self._execute_live_action_tool_call(
+                            await self._execute_live_action_tool_call(
                                 scope_type, scope_id, agent_id, live_message,
                                 call, context, allow_notify_master, allow_tasks, sent_entries,
                             )
@@ -3559,25 +3563,25 @@ class AIOrchestrator:
             )
         return normalized
 
-    def _send_scope_message(self, message: ChatMessage, content: str) -> list[dict]:
+    async def _send_scope_message(self, message: ChatMessage, content: str) -> list[dict]:
         content = self._strip_send_message_thinking(content)
         content = re.sub(r'\[\[.*?\]\]', '', content).strip()
         if message.chat_type == 'private':
             content = re.sub(r'\[CQ:at,qq=\d+\]', '', content).strip()
         # 无代码块：走原逻辑，行为与改动前完全一致。
         if not has_code_block(content):
-            return self._send_text_lines(message, content)
+            return await self._send_text_lines(message, content)
         # 有代码块：按原文顺序分段发送，text 段照原逻辑发，code 段渲染成图片发。
         # 整个分段流程再包一层兜底：任何意外都回退到原样逐行发送，绝不吞消息。
         try:
             segments = split_code_block_segments(content)
         except Exception as exc:
             warn(f'[AI][code2img] 分段失败，回退纯文本发送: {exc}')
-            return self._send_text_lines(message, content)
+            return await self._send_text_lines(message, content)
         entries: list[dict] = []
         for seg in segments:
             if seg.get('kind') == 'code':
-                img_entry = self._try_send_code_image(
+                img_entry = await self._try_send_code_image(
                     message,
                     seg.get('code') or '',
                     seg.get('language'),
@@ -3587,12 +3591,12 @@ class AIOrchestrator:
                     entries.append(img_entry)
                     continue
                 # 渲染或发图失败：降级为原样发送该段 raw 文本（含 ``` 围栏）。
-                entries.extend(self._send_text_lines(message, seg.get('raw') or ''))
+                entries.extend(await self._send_text_lines(message, seg.get('raw') or ''))
             else:
-                entries.extend(self._send_text_lines(message, seg.get('text') or ''))
+                entries.extend(await self._send_text_lines(message, seg.get('text') or ''))
         return entries
 
-    def _send_text_lines(self, message: ChatMessage, content: str) -> list[dict]:
+    async def _send_text_lines(self, message: ChatMessage, content: str) -> list[dict]:
         """把一段纯文本按原逻辑拆行并逐行发送。等价于原 _send_scope_message 的发送循环。"""
         content = self._split_long_reply_lines(content)
         entries: list[dict] = []
@@ -3600,14 +3604,14 @@ class AIOrchestrator:
             line = line.strip()
             if not line:
                 continue
-            response = self.bot.send_text(message.chat_type, message.chat_id, line)
+            response = await asyncio.to_thread(self.bot.send_text, message.chat_type, message.chat_id, line)
             message_id = None
             if isinstance(response, dict):
                 message_id = (response.get('data') or {}).get('message_id')
             entries.append({'text': line, 'message_id': message_id})
         return entries
 
-    def _try_send_code_image(
+    async def _try_send_code_image(
         self,
         message: ChatMessage,
         code: str,
@@ -3637,7 +3641,7 @@ class AIOrchestrator:
                 target_id = int(message.chat_id)
             except (TypeError, ValueError):
                 target_id = message.chat_id
-            response = self.bot.send_image(message.chat_type, target_id, file_arg)
+            response = await asyncio.to_thread(self.bot.send_image, message.chat_type, target_id, file_arg)
             message_id = None
             if isinstance(response, dict):
                 message_id = (response.get('data') or {}).get('message_id')
@@ -3656,7 +3660,7 @@ class AIOrchestrator:
             os.remove(path)
         except Exception as exc:
             warn(f'[AI][code2img] 删除临时图失败（忽略）: {exc}')
-    def _execute_live_action_tool_call(
+    async def _execute_live_action_tool_call(
         self,
         scope_type: str,
         scope_id: str,
@@ -3677,7 +3681,7 @@ class AIOrchestrator:
         )
         if call.name == 'send_message':
             content = str(tool_input.get('content') or '').strip()
-            entries = self._send_scope_message(message, content)
+            entries = await self._send_scope_message(message, content)
             if not entries:
                 return '内容为空或清理后为空，未发送。'
             sent_entries.extend(entries)
@@ -3691,7 +3695,7 @@ class AIOrchestrator:
             if not message_id:
                 return '缺少 message_id，无法撤回。'
             try:
-                self.bot.recall_message(message_id)
+                await asyncio.to_thread(self.bot.recall_message, message_id)
             except Exception as exc:
                 return f'撤回失败: {exc}'
             return f'已撤回消息 {message_id}。'

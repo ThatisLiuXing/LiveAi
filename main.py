@@ -135,8 +135,9 @@ if __name__ == "__main__":
             version_line = f"版本  {cur}  ·  {_s('GitHub: 无法检查', 'gray')}"
         else:
             version_line = f"版本  {cur}  ·  {_s('GitHub 已是最新', 'gray')}"
-    except Exception:
-        pass
+    except Exception as exc:
+        from pack.console_logger import warn
+        warn(f'版本检查失败（跳过）: {exc}')
 
     # ── 构建面板 ──
     _mm = ModelManager(config.ai.models_config_path)

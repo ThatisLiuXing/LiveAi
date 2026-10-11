@@ -14,6 +14,9 @@ class JsonStore:
             self.file_path.write_text('{}', encoding='utf-8')
 
     def load(self) -> dict:
+        """返回当前状态的缓存引用。约定只读：调用方不得原地修改返回的 dict，
+        所有写入必须走 update()（内部对缓存做 deepcopy 后落盘）。需要对外返回
+        可安全修改的快照时，请用 copy.deepcopy 或 dict 浅拷贝自行包裹。"""
         with self._lock:
             if self._cache is not None:
                 return self._cache
